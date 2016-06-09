@@ -200,6 +200,7 @@
     <ClInclude Include="..\..\..\addons\ofxImGui\libs\imgui\src\stb_rect_pack.h" />
     <ClInclude Include="..\..\..\addons\ofxImGui\libs\imgui\src\stb_textedit.h" />
     <ClInclude Include="..\..\..\addons\ofxImGui\libs\imgui\src\stb_truetype.h" />
+    <ClInclude Include="src\util.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="$(OF_ROOT)\libs\openFrameworksCompiled\project\vs\openframeworksLib.vcxproj">

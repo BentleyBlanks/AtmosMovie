@@ -6,6 +6,7 @@
 #include "ThemeTest.h"
 #include "AtmosShapeData.h"
 #include "AtmosLightData.h"
+#include "util.h"
 
 class ofApp : public ofBaseApp
 {
@@ -27,6 +28,7 @@ public:
     void gotMessage(ofMessage msg);
 
     void imGuiTheme();
+    // 代渲染数据已设定完毕开始渲染前分配工作
     void initAtmos();
 
     // ImGui
@@ -112,7 +114,7 @@ public:
     float progress;
 
     // Atmos begin / end once
-    bool atmosInitOnce, atmosEndOnce;
+    bool atmosInitOnce, renderingFinished;
 
     // window
     int windowWidth, windowHeight;

@@ -14,7 +14,7 @@ enum a3MaterialType
 void ofApp::setup(){
     atmosInitOnce = false;
     // 未初始化不允许直接结束
-    atmosEndOnce = true;
+    renderingFinished = true;
 
     // Gui
     ImGuiIO& io = ImGui::GetIO();
@@ -38,7 +38,7 @@ void ofApp::update(){
             initAtmos();
             // 已初始化完毕允许渲染器结束工作的延迟执行
             atmosInitOnce = true;
-            atmosEndOnce = false;
+            renderingFinished = false;
         }
 
         if(!renderer->isFinished())
@@ -47,11 +47,23 @@ void ofApp::update(){
         }
         else
         {
-            // 仅结束一次
-            if(!atmosEndOnce)
+            if(!renderingFinished)
             {
+                // 是否为关键帧中的一帧完成渲染
                 renderer->end();
-                atmosEndOnce = true;
+
+                // 查看是否需要渲染关键帧
+                // 有则需要重新对renderer等进行分配
+                if(hasKeyFrame && currentFrame + 1 >= startFrame && currentFrame + 1 <= endFrame)
+                {
+                    // 代渲染数据已设定完毕开始渲染前分配工作
+                    // 初始化渲染器必要组件
+                    initAtmos();
+
+                    currentFrame++;
+                }
+                else
+                    renderingFinished = true;
             }
         }
 
@@ -155,11 +167,15 @@ void ofApp::initAtmos()
 {
     ofSetWindowShape(imageWidth, imageHeight);
 
+    // 初始化关键帧信息
+    currentFrame = startFrame;
+
     // Atmos
     if(renderer)
     {
         // 同时释放与renderer相关的指针内存
         A3_SAFE_DELETE(renderer->sampler);
+        A3_SAFE_DELETE(renderer->camera->image)
         A3_SAFE_DELETE(renderer->camera);
         A3_SAFE_DELETE(renderer->integrator);
         A3_SAFE_DELETE(renderer->colorList);
@@ -172,7 +188,11 @@ void ofApp::initAtmos()
             A3_SAFE_DELETE(l);
         scene->lights.clear();
         for(auto p : scene->primitiveSet->primitives)
+        {
+            A3_SAFE_DELETE(p->areaLight);
+            A3_SAFE_DELETE(p->bsdf);
             A3_SAFE_DELETE(p);
+        }
         scene->primitiveSet->primitives.clear();
         A3_SAFE_DELETE(scene->primitiveSet);
         A3_SAFE_DELETE(scene);
@@ -284,9 +304,31 @@ void ofApp::initAtmos()
         if(s->name == "Mesh")
         {
             meshData* data = (meshData*) s;
-
             a3ModelImporter importer;
-            std::vector<a3Shape*>* model = importer.load(data->modelPath);
+            std::vector<a3Shape*>* model = NULL;
+            if(data->supportKeyFrame)
+            {
+                // 修改路径，添加关键帧后缀
+                string baseName = ofFilePath::getBaseName(data->modelPath);
+                string extension = ofFilePath::getFileExt(data->modelPath);
+                string pathWithoutName = ofFilePath::getEnclosingDirectory(data->modelPath);
+
+                int count = getNumOfDigits<float>(currentFrame);
+                // 至多支持999999个关键帧
+                int numOfZero = 6 - count;
+                // XXXXXX / 0XXXXX / 00XXXX / 000XXX / 0000XX / 00000X
+                for(int i = 0; i < numOfZero; i++)
+                {
+                    baseName += i == 0 ? "_" : "";
+                    baseName += ofToString(0);
+                }
+
+                baseName += ofToString(currentFrame) + ".";
+
+                model = importer.load((pathWithoutName + baseName + extension).c_str());
+            }
+            else
+                model = importer.load(data->modelPath);
 
             for(auto s : *model)
                 addShape(s, t3Vector3f(1.0f), t3Vector3f(0.0f), data->materialType, NULL);
@@ -342,8 +384,8 @@ void ofApp::initImGui()
     openAboutWindow = false;
 
     // config
-    startFrame = 0.0f;
-    endFrame = 0.0f;
+    startFrame = 1;
+    endFrame = 1;
     spp = 8;
 
     imageWidth = 1024;
@@ -1055,7 +1097,7 @@ void ofApp::renderingPanel()
             {
                 atmosInitOnce = false;
                 // 未初始化不允许直接结束
-                atmosEndOnce = true;
+                renderingFinished = true;
 
                 initImGui();
             }
