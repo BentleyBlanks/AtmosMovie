@@ -158,13 +158,24 @@ void ofApp::initAtmos()
     // Atmos
     if(renderer)
     {
-        delete renderer;
-        renderer = NULL;
+        // 同时释放与renderer相关的指针内存
+        A3_SAFE_DELETE(renderer->sampler);
+        A3_SAFE_DELETE(renderer->camera);
+        A3_SAFE_DELETE(renderer->integrator);
+        A3_SAFE_DELETE(renderer->colorList);
+        A3_SAFE_DELETE(renderer);
     }
     if(scene)
     {
-        delete scene;
-        scene = NULL;
+        // 同时释放与scene相关的指针内存
+        for(auto l : scene->lights)
+            A3_SAFE_DELETE(l);
+        scene->lights.clear();
+        for(auto p : scene->primitiveSet->primitives)
+            A3_SAFE_DELETE(p);
+        scene->primitiveSet->primitives.clear();
+        A3_SAFE_DELETE(scene->primitiveSet);
+        A3_SAFE_DELETE(scene);
     }
 
     // alloc
@@ -1042,7 +1053,6 @@ void ofApp::renderingPanel()
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(3 / 7.0f, 0.8f, 0.8f));
             if(ImGui::Button("Back", ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
             {
-
                 atmosInitOnce = false;
                 // 未初始化不允许直接结束
                 atmosEndOnce = true;
@@ -1058,9 +1068,9 @@ void ofApp::renderingPanel()
             ImGui::Text("Waiting");
 
             ImGui::PushID(0);
-            ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(2 / 7.0f, 0.6f, 0.6f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(2 / 7.0f, 0.7f, 0.7f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(2 / 7.0f, 0.8f, 0.8f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(1 / 7.0f, 0.6f, 0.6f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(1 / 7.0f, 0.7f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(1 / 7.0f, 0.8f, 0.8f));
             string frameProgress = ofToString(currentFrame) + "/" + ofToString(endFrame - startFrame);
             if(ImGui::Button(frameProgress.c_str(), ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
             {
