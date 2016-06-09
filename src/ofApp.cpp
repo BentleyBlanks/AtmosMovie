@@ -22,6 +22,9 @@ void ofApp::setup(){
 
     gui.setup();
 
+    logo.load("images/logo.png");
+    logoButtonID = gui.loadImage(logo);
+
     initImGui();
 }
 
@@ -38,18 +41,30 @@ void ofApp::update(){
         }
 
         if(!renderer->isFinished())
+        {
             renderer->render(scene);
+        }
         else
-            renderer->end();
+        {
+            // 仅结束一次
+            static bool first = true; 
+            if(first)
+            {
+                renderer->end();
+                first = false;
+            }
+        }
 
         // 渲染中更新预览纹理
         int gridWidth = renderer->gridWidth;
         int gridHeight = renderer->gridHeight;
 
         int gridX = renderer->startX + (int) ((renderer->currentGrid - 1) % renderer->levelX) * gridWidth;
-        int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelY) * gridHeight;
+        int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelX) * gridHeight;
         int gridEndX = gridX + gridWidth;
         int gridEndY = gridY + gridHeight;
+
+        progress = (float)renderer->currentGrid / (renderer->levelX * renderer->levelY);
 
         // 更新网格待渲染区域
         if(!renderer->isFinished())
@@ -60,6 +75,11 @@ void ofApp::update(){
                 for(int y = gridY; y < gridEndY; y++)
                 {
                     a3Spectrum& color = renderer->colorList[x + y * imageWidth];
+
+                    // 截断
+                    color.x = t3Math::clamp(color.x, 0.0f, 1.0f);
+                    color.y = t3Math::clamp(color.y, 0.0f, 1.0f);
+                    color.z = t3Math::clamp(color.z, 0.0f, 1.0f);
 
                     previewPixels.setColor(x, y, ofColor(color.x * 255, color.y * 255, color.z * 255));
                 }
@@ -103,6 +123,12 @@ void ofApp::draw(){
                 ImGui::EndMenu();
             }
 
+            if(ImGui::BeginMenu("About"))
+            {
+                openAboutWindow = !openAboutWindow;
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMainMenuBar();
         }
 
@@ -110,6 +136,7 @@ void ofApp::draw(){
         cameraMenu();
         shapeMenu();
         lightMenu();
+        about();
     }
     else
     {
@@ -126,6 +153,8 @@ void ofApp::draw(){
 //--------------------------------------------------------------
 void ofApp::initAtmos()
 {
+    ofSetWindowShape(imageWidth, imageHeight);
+
     // alloc
     a3Film* image = new a3Film(imageWidth, imageHeight, saveToPath);
 
@@ -286,6 +315,7 @@ void ofApp::initImGui()
     openShapeWindow = true;
     openRenderingWindow = true;
     openLightWindow = true;
+    openAboutWindow = false;
 
     // config
     startFrame = 0.0f;
@@ -953,6 +983,7 @@ void ofApp::renderingPanel()
     if(ImGui::Begin("Rendering", &openRenderingPanel))
     {
         // 数据只读 UI不可写
+        ImGui::Text("Key Frame");
         int frameRange[2] = {startFrame, endFrame};
         ImGui::DragInt2("Range", frameRange, 1.0f);
 
@@ -960,10 +991,29 @@ void ofApp::renderingPanel()
         ImGui::DragInt("Current", &current, 1.0f);
 
         // 进度条
-        float processTemp = progress;
-        ImGui::ProgressBar(processTemp, ImVec2(0.0f, 0.0f));
+        ImGui::Separator();
+        ImGui::Text("Current Frame");
+        ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
         ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
         ImGui::Text("Rendering Progress");
+    }
+
+    ImGui::End();
+}
+
+//--------------------------------------------------------------
+void ofApp::about()
+{
+    if(!openAboutWindow) return;
+
+    ImGuiWindowFlags window_flags = 0;
+    ImGui::SetNextWindowSize(ofVec2f(400, 300), ImGuiSetCond_FirstUseEver);
+    if(ImGui::Begin("About", &openAboutWindow))
+    {
+        ImGui::ImageButton((ImTextureID) (uintptr_t) logoButtonID, ImVec2(200, 200));
+        ImGui::SameLine();
+        ImGui::Text("Atmos is developed by GBB in 2016.");
+        ImGui::Text("And I guess no one would notice this passage.");
     }
 
     ImGui::End();

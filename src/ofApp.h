@@ -56,6 +56,9 @@ public:
     // process of rendering
     void renderingPanel();
 
+    // about window
+    void about();
+
     // Atmos
     a3GridRenderer* renderer;
     a3Scene* scene;
@@ -67,7 +70,9 @@ public:
 
     // ImGui
     ofxImGui gui;
-    bool openRenderingWindow, openCameraWindow, openShapeWindow, openLightWindow;
+    bool openRenderingWindow, openCameraWindow, openShapeWindow, openLightWindow, openAboutWindow;
+    ofImage logo;
+    GLuint logoButtonID;
 
     // Atmos with ImGui
     // config
@@ -105,4 +110,7 @@ public:
     bool stopRendering;
     int currentFrame;
     float progress;
+
+    // window
+    int windowWidth, windowHeight;
 };
