@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <string>
 
 #ifndef FLOAT3
@@ -36,10 +36,10 @@ struct spotLightData : public lightData
 
     float intensity[3];
 
-    // Ô²×¶ÓëÖĞĞÄÏß¼Ğ½Ç(»¡¶È)
+    // åœ†é”¥ä¸ä¸­å¿ƒçº¿å¤¹è§’(å¼§åº¦)
     float coneAngle;
 
-    // ¿ªÊ¼²úÉú°ëÓ°µÄ½Ç¶È(»¡¶È)
+    // å¼€å§‹äº§ç”ŸåŠå½±çš„è§’åº¦(å¼§åº¦)
     float falloffStart;
 };
 

@@ -1,4 +1,4 @@
-#include "ofApp.h"
+ï»¿#include "ofApp.h"
 
 //#define TEST
 
@@ -35,7 +35,7 @@ void ofApp::update(){
         static bool first = true;
         if(first)
         {
-            // ³õÊ¼»¯äÖÈ¾Æ÷±ØÒª×é¼ş
+            // åˆå§‹åŒ–æ¸²æŸ“å™¨å¿…è¦ç»„ä»¶
             initAtmos();
             first = false;
         }
@@ -46,7 +46,7 @@ void ofApp::update(){
         }
         else
         {
-            // ½ö½áÊøÒ»´Î
+            // ä»…ç»“æŸä¸€æ¬¡
             static bool first = true; 
             if(first)
             {
@@ -55,7 +55,7 @@ void ofApp::update(){
             }
         }
 
-        // äÖÈ¾ÖĞ¸üĞÂÔ¤ÀÀÎÆÀí
+        // æ¸²æŸ“ä¸­æ›´æ–°é¢„è§ˆçº¹ç†
         int gridWidth = renderer->gridWidth;
         int gridHeight = renderer->gridHeight;
 
@@ -66,7 +66,7 @@ void ofApp::update(){
 
         progress = (float)renderer->currentGrid / (renderer->levelX * renderer->levelY);
 
-        // ¸üĞÂÍø¸ñ´ıäÖÈ¾ÇøÓò
+        // æ›´æ–°ç½‘æ ¼å¾…æ¸²æŸ“åŒºåŸŸ
         if(!renderer->isFinished())
         {
 #pragma omp parallel for schedule(dynamic)
@@ -76,7 +76,7 @@ void ofApp::update(){
                 {
                     a3Spectrum& color = renderer->colorList[x + y * imageWidth];
 
-                    // ½Ø¶Ï
+                    // æˆªæ–­
                     color.x = t3Math::clamp(color.x, 0.0f, 1.0f);
                     color.y = t3Math::clamp(color.y, 0.0f, 1.0f);
                     color.z = t3Math::clamp(color.z, 0.0f, 1.0f);
@@ -94,7 +94,7 @@ void ofApp::update(){
 void ofApp::draw(){
     gui.begin();
 
-    // ´ıäÖÈ¾½çÃæ
+    // å¾…æ¸²æŸ“ç•Œé¢
     if(!startRendering)
     {
         if(ImGui::BeginMainMenuBar())
@@ -140,10 +140,10 @@ void ofApp::draw(){
     }
     else
     {
-        // ½¥½øäÖÈ¾Ô¤ÀÀ
+        // æ¸è¿›æ¸²æŸ“é¢„è§ˆ
         preview.draw(0, 0, imageWidth, imageHeight);
 
-        // äÖÈ¾ÖĞ½ø¶È½çÃæ
+        // æ¸²æŸ“ä¸­è¿›åº¦ç•Œé¢
         renderingPanel();
     }
 
@@ -213,7 +213,7 @@ void ofApp::initAtmos()
             s->bsdf = new a3Dieletric(R);
             break;
         default:
-            a3Log::error("Î´ÕÒµ½Ö¸¶¨ÀàĞÍ²ÄÖÊ: %d\n", type);
+            a3Log::error("æœªæ‰¾åˆ°æŒ‡å®šç±»å‹æè´¨: %d\n", type);
             break;
         }
 
@@ -291,7 +291,7 @@ void ofApp::initAtmos()
         }
         else if(s->name == "Triangle")
         {
-            // ÀÁµÃĞ´
+            // æ‡’å¾—å†™
         }
         else if(s->name == "Plane")
         {
@@ -540,7 +540,7 @@ void ofApp::shapeMenu()
     ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
     if(ImGui::Begin("Shape", &openShapeWindow))
     {
-        // Ç¿ĞĞ¹æ¶¨Ë³Ğò
+        // å¼ºè¡Œè§„å®šé¡ºåº
         const char* items[] = {"Triangle Mesh", "Infinite Plane", "Sphere", "Disk", "Triangle", "Plane"};
         static int item2 = 1;
         ImGui::Combo("Shape Type", &item2, items, 6);
@@ -550,7 +550,7 @@ void ofApp::shapeMenu()
             switch(item2)
             {
             case 0:
-                // ±¾ÖÊÎª¶ÁÈ¡obj ´Ë´¦½ö×÷Õ¼Î»·û
+                // æœ¬è´¨ä¸ºè¯»å–obj æ­¤å¤„ä»…ä½œå ä½ç¬¦
                 shapeList.push_back(new meshData());
                 break;
             case 1:
@@ -601,7 +601,7 @@ void ofApp::lightMenu()
     ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
     if(ImGui::Begin("Light", &openLightWindow))
     {
-        // Ç¿ĞĞ¹æ¶¨Ë³Ğò
+        // å¼ºè¡Œè§„å®šé¡ºåº
         const char* items[] = {"Area", "Spot", "Point", "Infinite"};
         static int item2 = 1;
         ImGui::Combo("Shape Type", &item2, items, 4);
@@ -611,7 +611,7 @@ void ofApp::lightMenu()
             switch(item2)
             {
             case 0:
-                // ±¾ÖÊÎª¶ÁÈ¡obj ´Ë´¦½ö×÷Õ¼Î»·û
+                // æœ¬è´¨ä¸ºè¯»å–obj æ­¤å¤„ä»…ä½œå ä½ç¬¦
                 lightList.push_back(new areaLightData());
                 break;
             case 1:
@@ -676,7 +676,7 @@ void ofApp::shapeSphere(int index)
 //--------------------------------------------------------------
 void ofApp::shapeTriangle(int index)
 {
-    a3Log::warning("Triangle: Ä¾ÓĞÊµÏÖ, ºÇºÇ\n");
+    a3Log::warning("Triangle: æœ¨æœ‰å®ç°, å‘µå‘µ\n");
 }
 
 //--------------------------------------------------------------
@@ -684,7 +684,7 @@ void ofApp::shapeTriangleMesh(int index)
 {
 #define addSuffix(str) str += ofToString(index) + "a3TriangleMesh"
 
-    // Ä¿Ç°ÓÉÓÚMesh¿ª·¢Î´Íê³É£¬Òò´ËÑÓ³Ù·ÖÅäprimitive£¬½ö×÷µØÖ·±£´æ
+    // ç›®å‰ç”±äºMeshå¼€å‘æœªå®Œæˆï¼Œå› æ­¤å»¶è¿Ÿåˆ†é…primitiveï¼Œä»…ä½œåœ°å€ä¿å­˜
     ImGui::Separator();
     string meshCount = "Mesh";
     meshCount += "[" + ofToString(index) + "]";
@@ -757,7 +757,7 @@ void ofApp::shapeDisk(int index)
 //--------------------------------------------------------------
 void ofApp::shapePlane(int index)
 {
-    a3Log::warning("Plane: Ä¾ÓĞÊµÏÖ, ºÇºÇ\n");
+    a3Log::warning("Plane: æœ¨æœ‰å®ç°, å‘µå‘µ\n");
 }
 
 //--------------------------------------------------------------
@@ -824,7 +824,7 @@ void ofApp::setBSDF(int index, shapeData* shape)
     string materialTypeName = "Material Type##";
     materialTypeName += ofToString(index) + shape->name;
 
-    // Ç¿ĞĞ¹æ¶¨Ë³Ğò
+    // å¼ºè¡Œè§„å®šé¡ºåº
     const char* items[] = {"Glass", "Mirror", "Diffuse"};
     ImGui::Combo(materialTypeName.c_str(), &shape->materialType, items, 3);
 }
@@ -832,7 +832,7 @@ void ofApp::setBSDF(int index, shapeData* shape)
 //--------------------------------------------------------------
 void ofApp::lightArea(int index)
 {
-    a3Log::warning("Area Light: Ä¾ÓĞÊµÏÖ, ºÇºÇ\n");
+    a3Log::warning("Area Light: æœ¨æœ‰å®ç°, å‘µå‘µ\n");
 }
 
 //--------------------------------------------------------------
@@ -982,7 +982,7 @@ void ofApp::renderingPanel()
     ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
     if(ImGui::Begin("Rendering", &openRenderingPanel))
     {
-        // Êı¾İÖ»¶Á UI²»¿ÉĞ´
+        // æ•°æ®åªè¯» UIä¸å¯å†™
         ImGui::Text("Key Frame");
         int frameRange[2] = {startFrame, endFrame};
         ImGui::DragInt2("Range", frameRange, 1.0f);
@@ -990,7 +990,7 @@ void ofApp::renderingPanel()
         int current = currentFrame;
         ImGui::DragInt("Current", &current, 1.0f);
 
-        // ½ø¶ÈÌõ
+        // è¿›åº¦æ¡
         ImGui::Separator();
         ImGui::Text("Current Frame");
         ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
