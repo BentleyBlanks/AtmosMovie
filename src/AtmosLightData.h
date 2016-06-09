@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <string>
+#include <ofMain.h>
 
 #ifndef FLOAT3
 #define SIZE_FLOAT_3 3 * sizeof(float)
@@ -58,8 +59,12 @@ struct areaLightData : public lightData
 struct infiniteAreaLightData : public lightData
 {
     infiniteAreaLightData() :lightData("Inifinite Area Light")
-    {
-        strcpy(imagePath, "./data/images/envmap.png");
+    {        // 动态获取当前可执行文件目录
+        string exePath = ofFilePath::getCurrentWorkingDirectory();
+
+        exePath += "\\data\\images\\envmap.exr";
+
+        strcpy(imagePath, exePath.c_str());
     }
 
     char imagePath[1024];

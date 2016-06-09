@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <string>
+#include <ofMain.h>
 
 #ifndef FLOAT3
 #define SIZE_FLOAT_3 3 * sizeof(float)
@@ -30,9 +31,14 @@ struct diskData : public shapeData
 
 struct meshData : public shapeData
 {
-    meshData():supportKeyFrame(false), shapeData("Mesh")
+    meshData():supportKeyFrame(true), shapeData("Mesh")
     {
-        strcpy(modelPath, "./data/models/test.obj");
+        // 动态获取当前可执行文件目录
+        string exePath = ofFilePath::getCurrentWorkingDirectory();
+
+        exePath += "\\data\\models\\blender\\Atmos.obj";
+
+        strcpy(modelPath, exePath.c_str());
     }
 
     char modelPath[1024];

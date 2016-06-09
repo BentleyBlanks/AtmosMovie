@@ -16,6 +16,8 @@ void ofApp::setup(){
     // 未初始化不允许直接结束
     renderingFinished = true;
 
+    currentFrame = 0;
+
     // Gui
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->AddFontFromFileTTF("./data/DroidSans.ttf", 16.5f, NULL, io.Fonts->GetGlyphRangesChinese());
@@ -44,6 +46,39 @@ void ofApp::update(){
         if(!renderer->isFinished())
         {
             renderer->render(scene);
+
+            // 渲染中更新预览纹理
+            int gridWidth = renderer->gridWidth;
+            int gridHeight = renderer->gridHeight;
+
+            int gridX = renderer->startX + (int) ((renderer->currentGrid - 1) % renderer->levelX) * gridWidth;
+            int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelX) * gridHeight;
+            int gridEndX = gridX + gridWidth;
+            int gridEndY = gridY + gridHeight;
+
+            progress = (float) renderer->currentGrid / (renderer->levelX * renderer->levelY);
+
+            // 更新网格待渲染区域
+            if(!renderer->isFinished())
+            {
+#pragma omp parallel for schedule(dynamic)
+                for(int x = gridX; x < gridEndX; x++)
+                {
+                    for(int y = gridY; y < gridEndY; y++)
+                    {
+                        a3Spectrum& color = renderer->colorList[x + y * imageWidth];
+
+                        // 截断
+                        color.x = t3Math::clamp(color.x, 0.0f, 1.0f);
+                        color.y = t3Math::clamp(color.y, 0.0f, 1.0f);
+                        color.z = t3Math::clamp(color.z, 0.0f, 1.0f);
+
+                        previewPixels.setColor(x, y, ofColor(color.x * 255, color.y * 255, color.z * 255));
+                    }
+                }
+
+                preview.loadData(previewPixels);
+            }
         }
         else
         {
@@ -56,48 +91,15 @@ void ofApp::update(){
                 // 有则需要重新对renderer等进行分配
                 if(hasKeyFrame && currentFrame + 1 >= startFrame && currentFrame + 1 <= endFrame)
                 {
+                    currentFrame++;
+
                     // 代渲染数据已设定完毕开始渲染前分配工作
                     // 初始化渲染器必要组件
                     initAtmos();
-
-                    currentFrame++;
                 }
                 else
                     renderingFinished = true;
             }
-        }
-
-        // 渲染中更新预览纹理
-        int gridWidth = renderer->gridWidth;
-        int gridHeight = renderer->gridHeight;
-
-        int gridX = renderer->startX + (int) ((renderer->currentGrid - 1) % renderer->levelX) * gridWidth;
-        int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelX) * gridHeight;
-        int gridEndX = gridX + gridWidth;
-        int gridEndY = gridY + gridHeight;
-
-        progress = (float)renderer->currentGrid / (renderer->levelX * renderer->levelY);
-
-        // 更新网格待渲染区域
-        if(!renderer->isFinished())
-        {
-#pragma omp parallel for schedule(dynamic)
-            for(int x = gridX; x < gridEndX; x++)
-            {
-                for(int y = gridY; y < gridEndY; y++)
-                {
-                    a3Spectrum& color = renderer->colorList[x + y * imageWidth];
-
-                    // 截断
-                    color.x = t3Math::clamp(color.x, 0.0f, 1.0f);
-                    color.y = t3Math::clamp(color.y, 0.0f, 1.0f);
-                    color.z = t3Math::clamp(color.z, 0.0f, 1.0f);
-
-                    previewPixels.setColor(x, y, ofColor(color.x * 255, color.y * 255, color.z * 255));
-                }
-            }
-
-            preview.loadData(previewPixels);
         }
     }
 }
@@ -168,14 +170,14 @@ void ofApp::initAtmos()
     ofSetWindowShape(imageWidth, imageHeight);
 
     // 初始化关键帧信息
-    currentFrame = startFrame;
+    //currentFrame = startFrame;
 
     // Atmos
     if(renderer)
     {
         // 同时释放与renderer相关的指针内存
         A3_SAFE_DELETE(renderer->sampler);
-        A3_SAFE_DELETE(renderer->camera->image)
+        //A3_SAFE_DELETE(renderer->camera->image)
         A3_SAFE_DELETE(renderer->camera);
         A3_SAFE_DELETE(renderer->integrator);
         A3_SAFE_DELETE(renderer->colorList);
@@ -199,7 +201,15 @@ void ofApp::initAtmos()
     }
 
     // alloc
-    a3Film* image = new a3Film(imageWidth, imageHeight, saveToPath);
+    a3Film* image = NULL;
+    if(hasKeyFrame)
+    {
+        string path = addKeyFrameInPath(currentFrame, saveToPath);
+
+        image = new a3Film(imageWidth, imageHeight, path);
+    }
+    else
+        image = new a3Film(imageWidth, imageHeight, saveToPath);
 
     previewPixels.allocate(imageWidth, imageHeight, OF_PIXELS_RGB);
 
@@ -308,24 +318,10 @@ void ofApp::initAtmos()
             std::vector<a3Shape*>* model = NULL;
             if(data->supportKeyFrame)
             {
-                // 修改路径，添加关键帧后缀
-                string baseName = ofFilePath::getBaseName(data->modelPath);
-                string extension = ofFilePath::getFileExt(data->modelPath);
-                string pathWithoutName = ofFilePath::getEnclosingDirectory(data->modelPath);
+                // 路径中添加关键帧信息
+                string path = addKeyFrameInPath(currentFrame, data->modelPath);
 
-                int count = getNumOfDigits<float>(currentFrame);
-                // 至多支持999999个关键帧
-                int numOfZero = 6 - count;
-                // XXXXXX / 0XXXXX / 00XXXX / 000XXX / 0000XX / 00000X
-                for(int i = 0; i < numOfZero; i++)
-                {
-                    baseName += i == 0 ? "_" : "";
-                    baseName += ofToString(0);
-                }
-
-                baseName += ofToString(currentFrame) + ".";
-
-                model = importer.load((pathWithoutName + baseName + extension).c_str());
+                model = importer.load(path.c_str());
             }
             else
                 model = importer.load(data->modelPath);
@@ -385,13 +381,13 @@ void ofApp::initImGui()
 
     // config
     startFrame = 1;
-    endFrame = 1;
+    endFrame = 10;
     spp = 8;
 
     imageWidth = 1024;
     imageHeight = 768;
 
-    hasKeyFrame = false;
+    hasKeyFrame = true;
     startRendering = false;
 
     // image
@@ -403,7 +399,10 @@ void ofApp::initImGui()
     level[0] = 8;
     level[1] = 6;
 
-    strcpy(saveToPath, "./data/test.png");
+    // 动态获取当前可执行文件目录
+    string exePath = ofFilePath::getCurrentWorkingDirectory();
+    exePath += "\\data\\movie\\Test.png";
+    strcpy(saveToPath, exePath.c_str());
 
     // integrator
     enablePath = true;
@@ -418,13 +417,13 @@ void ofApp::initImGui()
     // camera
     cameraLookat[0] = 0.0f;
     cameraLookat[1] = 0.0f;
-    cameraLookat[2] = 1.0f;
+    cameraLookat[2] = 0.0f;
     cameraUp[0] = 0.0f;
-    cameraUp[1] = 1.0f;
-    cameraUp[2] = 0.0f;   
+    cameraUp[1] = 0.0f;
+    cameraUp[2] = 1.0f;   
     cameraOrigin[0] = 0.0f;
-    cameraOrigin[1] = 0.0f;
-    cameraOrigin[2] = 0.0f;
+    cameraOrigin[1] = 100.0f;
+    cameraOrigin[2] = 20.0f;
 
     cameraFov = 40.0f;
     cameraFocalDistance = 100.0f;
@@ -1113,7 +1112,7 @@ void ofApp::renderingPanel()
             ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(1 / 7.0f, 0.6f, 0.6f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(1 / 7.0f, 0.7f, 0.7f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(1 / 7.0f, 0.8f, 0.8f));
-            string frameProgress = ofToString(currentFrame) + "/" + ofToString(endFrame - startFrame);
+            string frameProgress = ofToString(currentFrame) + "/" + ofToString(endFrame - startFrame + 1);
             if(ImGui::Button(frameProgress.c_str(), ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
             {
                 a3Log::debug("Waiting...\n");

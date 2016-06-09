@@ -1,4 +1,7 @@
+﻿#pragma once
+#include <string>
 
+// 计算给定数字位数
 template<typename T>
 int getNumOfDigits(const T& number)
 {
@@ -13,3 +16,5 @@ int getNumOfDigits(const T& number)
 
     return count;
 }
+
+std::string addKeyFrameInPath(int keyFrame, std::string path);
