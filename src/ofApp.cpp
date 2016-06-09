@@ -2,48 +2,171 @@
 
 //#define TEST
 
-#ifdef TEST
 enum a3MaterialType
 {
-    NONE = 0,
-    LAMBERTIAN = 1,
-    MIRROR = 2,
-    GLASS = 3
+    NONE = -1,
+    GLASS = 0,
+    MIRROR = 1,
+    DIFFUSE = 2
 };
-#endif
+
 //--------------------------------------------------------------
 void ofApp::setup(){
-#ifdef TEST
+    // Atmos
+    renderer = NULL;
+    scene = NULL;
+
+    // Gui
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->AddFontFromFileTTF("./data/DroidSans.ttf", 16.5f, NULL, io.Fonts->GetGlyphRangesChinese());
+
+    gui.setup();
+
+    initImGui();
+}
+
+//--------------------------------------------------------------
+void ofApp::update(){
+    if(startRendering)
+    {
+        static bool first = true;
+        if(first)
+        {
+            // 初始化渲染器必要组件
+            initAtmos();
+            first = false;
+        }
+
+        if(!renderer->isFinished())
+            renderer->render(scene);
+        else
+            renderer->end();
+
+        // 渲染中更新预览纹理
+        int gridWidth = renderer->gridWidth;
+        int gridHeight = renderer->gridHeight;
+
+        int gridX = renderer->startX + (int) ((renderer->currentGrid - 1) % renderer->levelX) * gridWidth;
+        int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelY) * gridHeight;
+        int gridEndX = gridX + gridWidth;
+        int gridEndY = gridY + gridHeight;
+
+        // 更新网格待渲染区域
+        if(!renderer->isFinished())
+        {
+#pragma omp parallel for schedule(dynamic)
+            for(int x = gridX; x < gridEndX; x++)
+            {
+                for(int y = gridY; y < gridEndY; y++)
+                {
+                    a3Spectrum& color = renderer->colorList[x + y * imageWidth];
+
+                    previewPixels.setColor(x, y, ofColor(color.x * 255, color.y * 255, color.z * 255));
+                }
+            }
+
+            preview.loadData(previewPixels);
+        }
+    }
+}
+
+//--------------------------------------------------------------
+void ofApp::draw(){
+    gui.begin();
+
+    // 待渲染界面
+    if(!startRendering)
+    {
+        if(ImGui::BeginMainMenuBar())
+        {
+            if(ImGui::BeginMenu("Rendering"))
+            {
+                openRenderingWindow = !openRenderingWindow;
+                ImGui::EndMenu();
+            }
+
+            if(ImGui::BeginMenu("Camera"))
+            {
+                openCameraWindow = !openCameraWindow;
+                ImGui::EndMenu();
+            }
+
+            if(ImGui::BeginMenu("Shape"))
+            {
+                openShapeWindow = !openShapeWindow;
+                ImGui::EndMenu();
+            }
+
+            if(ImGui::BeginMenu("Light"))
+            {
+                openLightWindow = !openLightWindow;
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+
+        renderingMenu();
+        cameraMenu();
+        shapeMenu();
+        lightMenu();
+    }
+    else
+    {
+        // 渐进渲染预览
+        preview.draw(0, 0, imageWidth, imageHeight);
+
+        // 渲染中进度界面
+        renderingPanel();
+    }
+
+    gui.end();
+}
+
+//--------------------------------------------------------------
+void ofApp::initAtmos()
+{
     // alloc
-    a3Film* image = new a3Film(1024, 768, "data/grid.png");
-
-    for(int x = 0; x < image->width; x++)
-        for(int y = 0; y < image->height; y++)
-            points.push_back(ofVec2f(x, y));
-
-    imageWidth = image->width;
-    imageHeight = image->height;
+    a3Film* image = new a3Film(imageWidth, imageHeight, saveToPath);
 
     previewPixels.allocate(imageWidth, imageHeight, OF_PIXELS_RGB);
 
-    a3PerspectiveSensor* camera = camera = new a3PerspectiveSensor(t3Vector3f(0, 80, 20), t3Vector3f(0, 0, 0), t3Vector3f(0, 0, 1), 40, 100.0f, 0.0f, image);
+    a3PerspectiveSensor* camera = new a3PerspectiveSensor(t3Vector3f(cameraOrigin[0], cameraOrigin[1], cameraOrigin[2]), 
+                                                          t3Vector3f(cameraLookat[0], cameraLookat[1], cameraLookat[2]),
+                                                          t3Vector3f(cameraUp[0], cameraUp[1], cameraUp[2]),
+                                                          cameraFov, cameraFocalDistance, cameraLensRadius, image);
 
-    a3PathIntegrator* path = new a3PathIntegrator();
-    path->russianRouletteDepth = 3;
-    path->maxDepth = -1;
-
-    a3BVH* bvh = NULL;
     a3Scene* se = new a3Scene();
     scene = se;
-    se->primitiveSet = bvh = new a3BVH();
+    a3BVH* bvh = NULL;
 
-    renderer = new a3GridRenderer(8);
-    renderer->setLevel(10, 10);
+    if(enableBVH)
+        se->primitiveSet = bvh = new a3BVH();
+    else
+        se->primitiveSet = new a3Exhaustive();
+
+    renderer = new a3GridRenderer(spp);
+    renderer->setLevel(level[0], level[1]);
     renderer->camera = camera;
     renderer->sampler = new a3RandomSampler();
-    renderer->integrator = path;
-    renderer->enableGammaCorrection = true;
-    renderer->enableToneMapping = false;
+
+    // integrator
+    if(enablePath)
+    {
+        a3PathIntegrator* path = new a3PathIntegrator();
+        path->russianRouletteDepth = russianRouletteDepth;
+        path->maxDepth = -1;
+        renderer->integrator = path;
+    }
+    else
+    {
+        a3DirectLightingIntegrator* direct = new a3DirectLightingIntegrator();
+        direct->maxDepth = maxDepth;
+        renderer->integrator = direct;
+    }
+
+    renderer->enableGammaCorrection = enableGammaCorrection;
+    renderer->enableToneMapping = enableToneMapping;
 
     auto addShape = [&se](a3Shape* s, a3Spectrum R, a3Spectrum emission, int type, a3Texture<a3Spectrum>* texture)->auto
     {
@@ -51,7 +174,7 @@ void ofApp::setup(){
 
         switch(type)
         {
-        case LAMBERTIAN:
+        case DIFFUSE:
             s->bsdf = new a3Diffuse(R);
             break;
         case MIRROR:
@@ -61,6 +184,7 @@ void ofApp::setup(){
             s->bsdf = new a3Dieletric(R);
             break;
         default:
+            a3Log::error("未找到指定类型材质: %d\n", type);
             break;
         }
 
@@ -73,133 +197,84 @@ void ofApp::setup(){
         return s->bsdf;
     };
 
-    scene->addLight(new a3InfiniteAreaLight("data/images/grace-new_latlong.exr"));
+    // light
+    for(auto l : lightList)
+    {
+        if(l->name == "Area Light")
+        {
+            // do nothing
+            // still have bug
+        }
+        else if(l->name == "Spot Light")
+        {
+            spotLightData* data = (spotLightData*) l;
+            scene->addLight(new a3SpotLight(t3Vector3f(data->position[0], data->position[1], data->position[2]),
+                                            t3Vector3f(data->direction[0], data->direction[1], data->direction[2]),
+                                            a3Spectrum(data->intensity[0], data->intensity[1], data->intensity[2]),
+                                            data->coneAngle, data->falloffStart));
+        }
+        else if(l->name == "Point Light")
+        {
+            pointLightData* data = (pointLightData*) l;
+            scene->addLight(new a3PointLight(t3Vector3f(data->position[0], data->position[1], data->position[2]),
+                                             t3Vector3f(data->intensity[0], data->intensity[1], data->intensity[2])));
+        }
+        else if(l->name == "Inifinite Area Light")
+        {
+            infiniteAreaLightData* data = (infiniteAreaLightData*)l;
+            scene->addLight(new a3InfiniteAreaLight(data->imagePath));
+        }
+    }
 
-    a3ModelImporter importer;
-    std::vector<a3Shape*>* blender = importer.load("data/models/blender.obj");
+    // shape
+    for(auto s : shapeList)
+    {
+        if(s->name == "Mesh")
+        {
+            meshData* data = (meshData*) s;
 
-    for(auto s : *blender)
-        addShape(s, t3Vector3f(1.0f), t3Vector3f(0, 0, 0), GLASS, NULL);
+            a3ModelImporter importer;
+            std::vector<a3Shape*>* model = importer.load(data->modelPath);
 
-    bvh->init();
+            for(auto s : *model)
+                addShape(s, t3Vector3f(1.0f), t3Vector3f(0.0f), data->materialType, NULL);
+        }
+        else if(s->name == "InfinitePlane")
+        {
+            infinitePlaneData* data = (infinitePlaneData*) s;
+            addShape(new a3InfinitePlane(t3Vector3f(data->position[0], data->position[1], data->position[2]),
+                                         t3Vector3f(data->normal[0], data->normal[1], data->normal[2])),
+                     a3Spectrum(1.0f), a3Spectrum(0.0f), data->materialType, NULL);
+        }
+        else if(s->name == "Sphere")
+        {
+            sphereData* data = (sphereData*) s;
+            addShape(new a3Sphere(t3Vector3f(data->center[0], data->center[1], data->center[2]), data->radius),
+                     a3Spectrum(1.0f), a3Spectrum(0.0f), data->materialType, NULL);
+        }
+        else if(s->name == "Disk")
+        {
+            diskData* data = (diskData*) s;
+            addShape(new a3Disk(t3Vector3f(data->center[0], data->center[1], data->center[2]), 
+                                data->radius, 
+                                t3Vector3f(data->normal[0], data->normal[1], data->normal[2])), 
+                     a3Spectrum(1.0f), a3Spectrum(0.0f), data->materialType, NULL);
+        }
+        else if(s->name == "Triangle")
+        {
+            // 懒得写
+        }
+        else if(s->name == "Plane")
+        {
+            // do nothing
+            // still have bug
+        }
+    }
+
+    if(enableBVH)
+        bvh->init();
 
     renderer->begin();
-#else
-    ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->AddFontFromFileTTF("./data/DroidSans.ttf", 16.5f, NULL, io.Fonts->GetGlyphRangesChinese());
-
-    gui.setup();
-
-    initImGui();
-#endif
-}
-
-//--------------------------------------------------------------
-void ofApp::update(){
-#ifdef TEST
-    if(!renderer->isFinished())
-    {
-        static bool once = false; 
-        if(!once)
-        {
-            timer.start();
-            once = true;
-        }
-        renderer->render(scene);
-    }
-    else
-    {
-        static bool once = false;
-        if(!once)
-        {
-            renderer->end();
-
-            timer.end();
-
-            a3Log::info("Cost time: %f sec", timer.difference());
-
-            once = true;
-        }
-    }
-#else
-
-#endif
-}
-
-//--------------------------------------------------------------
-void ofApp::draw(){
-#ifdef TEST
-    int gridWidth = renderer->gridWidth;
-    int gridHeight = renderer->gridHeight;
-
-    int gridX = renderer->startX + (int) ((renderer->currentGrid - 1) % renderer->levelX) * gridWidth;
-    int gridY = renderer->startY + (int) ((renderer->currentGrid - 1) / renderer->levelY) * gridHeight;
-    int gridEndX = gridX + gridWidth;
-    int gridEndY = gridY + gridHeight;
-
-    // 更新网格待渲染区域
-    if(!renderer->isFinished())
-    {
-#pragma omp parallel for schedule(dynamic)
-        for(int x = gridX; x < gridEndX; x++)
-        {
-            for(int y = gridY; y < gridEndY; y++)
-            {
-                a3Spectrum& color = renderer->colorList[x + y * imageWidth];
-
-                previewPixels.setColor(x, y, ofColor(color.x * 255, color.y * 255, color.z * 255));
-            }
-        }
-
-        preview.loadData(previewPixels);
-    }
-
-    preview.draw(0, 0, imageWidth, imageHeight);
-#else
-    gui.begin();
-
-    if(ImGui::BeginMainMenuBar())
-    {
-        if(ImGui::BeginMenu("Rendering"))
-        {
-            openRenderingWindow = !openRenderingWindow;
-            ImGui::EndMenu();
-        }
-
-        if(ImGui::BeginMenu("Camera"))
-        {
-            openCameraWindow = !openCameraWindow;
-            ImGui::EndMenu();
-        }
-
-        if(ImGui::BeginMenu("Shape"))
-        {
-            openShapeWindow = !openShapeWindow;
-            ImGui::EndMenu();
-        }
-
-        if(ImGui::BeginMenu("Light"))
-        {
-            openLightWindow = !openLightWindow;
-            ImGui::EndMenu();
-        }
-
-        ImGui::EndMainMenuBar();
-    }
-
-    renderingMenu();
-    cameraMenu();
-    shapeMenu();
-    lightMenu();
-
-    gui.end();
-#endif
-}
-
-//--------------------------------------------------------------
-void ofApp::initAtmos()
-{
-
 }
 
 //--------------------------------------------------------------
@@ -215,11 +290,13 @@ void ofApp::initImGui()
     // config
     startFrame = 0.0f;
     endFrame = 0.0f;
+    spp = 8;
 
     imageWidth = 1024;
     imageHeight = 768;
 
     hasKeyFrame = false;
+    startRendering = false;
 
     // image
     localStartPos[0] = 0;
@@ -227,7 +304,10 @@ void ofApp::initImGui()
     localRenderSize[0] = imageWidth;
     localRenderSize[1] = imageHeight;
 
-    strcpy(saveToPath, "./data/");
+    level[0] = 8;
+    level[1] = 6;
+
+    strcpy(saveToPath, "./data/test.png");
 
     // integrator
     enablePath = true;
@@ -235,12 +315,16 @@ void ofApp::initImGui()
     maxDepth = -1;
     russianRouletteDepth = 3;
 
+    // post effect
+    enableGammaCorrection = false;
+    enableToneMapping = false;
+
     // camera
     cameraLookat[0] = 0.0f;
     cameraLookat[1] = 0.0f;
-    cameraLookat[2] = 0.0f;
+    cameraLookat[2] = 1.0f;
     cameraUp[0] = 0.0f;
-    cameraUp[1] = 0.0f;
+    cameraUp[1] = 1.0f;
     cameraUp[2] = 0.0f;   
     cameraOrigin[0] = 0.0f;
     cameraOrigin[1] = 0.0f;
@@ -249,6 +333,11 @@ void ofApp::initImGui()
     cameraFov = 40.0f;
     cameraFocalDistance = 100.0f;
     cameraLensRadius = 0.0f;
+
+    // ImGui Start Rendering
+    stopRendering = false;
+    currentFrame = startFrame;
+    progress = 0.0f;
 }
 
 //--------------------------------------------------------------
@@ -258,7 +347,7 @@ void ofApp::renderingMenu()
 
     ImGuiWindowFlags window_flags = 0;
     ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
-    if(ImGui::Begin("Rendering", &openRenderingWindow))
+    if(ImGui::Begin("Render Config", &openRenderingWindow))
     {
         ImGui::Text("Config");
         if(ImGui::DragInt("Start Frame", &startFrame, 1, 0, 10000))
@@ -302,6 +391,14 @@ void ofApp::renderingMenu()
                 localRenderSize[1] = imageHeight - localStartPos[1];
         }
 
+        if(ImGui::DragInt2("Level", level, 1.0f, 1.0f, 20.0f))
+        {
+            if(level[0] < imageWidth)
+                level[0] = imageWidth;
+            if(level[1] < imageHeight)
+                level[1] = imageHeight;
+        }
+
         ImGui::Separator();
         ImGui::Text("Save");
         ImGui::InputText("Image Path", saveToPath, sizeof(saveToPath) / sizeof(char));
@@ -325,7 +422,7 @@ void ofApp::renderingMenu()
 
         ImGui::Separator();
         ImGui::Text("Integrator");
-        static int e = 0;
+        static int e = 1;
         if(ImGui::RadioButton("Direct", &e, 0))
             enablePath = false;
         ImGui::SameLine();
@@ -346,6 +443,11 @@ void ofApp::renderingMenu()
         }
 
         ImGui::Separator();
+        ImGui::Text("Post Effect");
+        ImGui::Checkbox("Gamma Correction", &enableGammaCorrection);
+        ImGui::Checkbox("Tone Mapping", &enableToneMapping);
+
+        ImGui::Separator();
         ImGui::Text("Primitive Set");
         static int e1 = 0;
         if(ImGui::RadioButton("BVH", &e1, 0))
@@ -354,8 +456,23 @@ void ofApp::renderingMenu()
         if(ImGui::RadioButton("Exaustive", &e1, 1))
             enableBVH = false;
 
-        ImGui::Text(("Time Elapsed: " + ofToString(ofGetElapsedTimef()) + "s").c_str());
-        ImGui::Text("Time Remainning");
+        ImGui::Separator();
+        ImGui::Text("Status");
+        //ImGui::Text(("Time Elapsed: " + ofToString(ofGetElapsedTimef()) + "s").c_str());
+        //ImGui::Text("Time Remainning");
+
+        ImGui::PushID(0);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(3 / 7.0f, 0.6f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(3 / 7.0f, 0.7f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(3 / 7.0f, 0.8f, 0.8f));
+        //ImGui::PushItemWidth(-1);
+        if(ImGui::Button("Render", ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
+        {
+            startRendering = true;
+        }
+        //ImGui::PopItemWidth();
+        ImGui::PopStyleColor(3);
+        ImGui::PopID();
     }
 
     ImGui::End();
@@ -370,6 +487,7 @@ void ofApp::cameraMenu()
     ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
     if(ImGui::Begin("Camera", &openCameraWindow))
     {
+        ImGui::Text("Matrix");
         ImGui::DragFloat3("Lookat", cameraLookat, 1.0f);
         ImGui::DragFloat3("Origin", cameraOrigin, 1.0f);
         ImGui::DragFloat3("Up", cameraUp, 1.0f);
@@ -552,6 +670,8 @@ void ofApp::shapeTriangleMesh(int index)
     addSuffix(modelPath);
     ImGui::InputText(modelPath.c_str(), mesh->modelPath, 1024);
 
+    setBSDF(index, mesh);
+
     // save to button with custom color
     ImGui::PushID(0);
     ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(4 / 7.0f, 0.6f, 0.6f));
@@ -565,8 +685,7 @@ void ofApp::shapeTriangleMesh(int index)
     ImGui::PopStyleColor(3);
     ImGui::PopID();
 
-    setBSDF(index, mesh);
-
+    ImGui::SameLine();
     shapeDelete(index);
 
 #undef addSuffix
@@ -790,6 +909,7 @@ void ofApp::lightInfinite(int index)
     ImGui::PopStyleColor(3);
     ImGui::PopID();
 
+    ImGui::SameLine();
     lightDelete(index);
 
 #undef addSuffix
@@ -822,6 +942,31 @@ void ofApp::lightDelete(int index)
     }
     ImGui::PopStyleColor(3);
     ImGui::PopID();
+}
+
+//--------------------------------------------------------------
+void ofApp::renderingPanel()
+{
+    bool openRenderingPanel = true;
+    ImGuiWindowFlags window_flags = 0;
+    ImGui::SetNextWindowSize(ofVec2f(400, 500), ImGuiSetCond_FirstUseEver);
+    if(ImGui::Begin("Rendering", &openRenderingPanel))
+    {
+        // 数据只读 UI不可写
+        int frameRange[2] = {startFrame, endFrame};
+        ImGui::DragInt2("Range", frameRange, 1.0f);
+
+        int current = currentFrame;
+        ImGui::DragInt("Current", &current, 1.0f);
+
+        // 进度条
+        float processTemp = progress;
+        ImGui::ProgressBar(processTemp, ImVec2(0.0f, 0.0f));
+        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::Text("Rendering Progress");
+    }
+
+    ImGui::End();
 }
 
 //--------------------------------------------------------------

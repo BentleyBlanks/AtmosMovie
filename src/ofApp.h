@@ -53,6 +53,9 @@ public:
     void lightInfinite(int index);
     void lightDelete(int index);
 
+    // process of rendering
+    void renderingPanel();
+
     // Atmos
     a3GridRenderer* renderer;
     a3Scene* scene;
@@ -71,14 +74,21 @@ public:
     int startFrame, endFrame;
     int spp;
     bool hasKeyFrame;
+    bool startRendering;
+    int level[2];
+
     // image
     int imageWidth, imageHeight;
     int localStartPos[2], localRenderSize[2];
     char saveToPath[1024];
     char saveImageName[1024];
+
     // integrator / primitive set
     bool enablePath, enableBVH;
     int maxDepth, russianRouletteDepth;
+
+    // post effect
+    bool enableGammaCorrection, enableToneMapping;
 
     // camera
     float cameraLookat[3], cameraOrigin[3], cameraUp[3];
@@ -90,4 +100,9 @@ public:
 
     // light
     vector<lightData*> lightList;
+
+    // ImGui Start Rendering
+    bool stopRendering;
+    int currentFrame;
+    float progress;
 };
