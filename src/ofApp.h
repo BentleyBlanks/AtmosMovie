@@ -111,6 +111,9 @@ public:
     int currentFrame;
     float progress;
 
+    // Atmos begin / end once
+    bool atmosInitOnce, atmosEndOnce;
+
     // window
     int windowWidth, windowHeight;
 };

@@ -12,9 +12,9 @@ enum a3MaterialType
 
 //--------------------------------------------------------------
 void ofApp::setup(){
-    // Atmos
-    renderer = NULL;
-    scene = NULL;
+    atmosInitOnce = false;
+    // 未初始化不允许直接结束
+    atmosEndOnce = true;
 
     // Gui
     ImGuiIO& io = ImGui::GetIO();
@@ -32,12 +32,13 @@ void ofApp::setup(){
 void ofApp::update(){
     if(startRendering)
     {
-        static bool first = true;
-        if(first)
+        if(!atmosInitOnce)
         {
             // 初始化渲染器必要组件
             initAtmos();
-            first = false;
+            // 已初始化完毕允许渲染器结束工作的延迟执行
+            atmosInitOnce = true;
+            atmosEndOnce = false;
         }
 
         if(!renderer->isFinished())
@@ -47,11 +48,10 @@ void ofApp::update(){
         else
         {
             // 仅结束一次
-            static bool first = true; 
-            if(first)
+            if(!atmosEndOnce)
             {
                 renderer->end();
-                first = false;
+                atmosEndOnce = true;
             }
         }
 
@@ -154,6 +154,18 @@ void ofApp::draw(){
 void ofApp::initAtmos()
 {
     ofSetWindowShape(imageWidth, imageHeight);
+
+    // Atmos
+    if(renderer)
+    {
+        delete renderer;
+        renderer = NULL;
+    }
+    if(scene)
+    {
+        delete scene;
+        scene = NULL;
+    }
 
     // alloc
     a3Film* image = new a3Film(imageWidth, imageHeight, saveToPath);
@@ -309,6 +321,7 @@ void ofApp::initAtmos()
 //--------------------------------------------------------------
 void ofApp::initImGui()
 {
+    ofSetWindowShape(1280, 780);
     //io.Fonts->AddFontFromFileTTF("./data/Cousine-Regular.ttf", 10);
 
     openCameraWindow = true;
@@ -368,6 +381,27 @@ void ofApp::initImGui()
     stopRendering = false;
     currentFrame = startFrame;
     progress = 0.0f;
+
+    // clear lists
+    if(shapeList.size() > 0)
+    {
+        for (auto s : shapeList)
+        {
+            delete s;
+            s = NULL;
+        }
+        shapeList.clear();
+    }
+
+    if(lightList.size() > 0)
+    {
+        for(auto l : lightList)
+        {
+            delete l;
+            l = NULL;
+        }
+        lightList.clear();
+    }
 }
 
 //--------------------------------------------------------------
@@ -423,9 +457,9 @@ void ofApp::renderingMenu()
 
         if(ImGui::DragInt2("Level", level, 1.0f, 1.0f, 20.0f))
         {
-            if(level[0] < imageWidth)
+            if(level[0] > imageWidth)
                 level[0] = imageWidth;
-            if(level[1] < imageHeight)
+            if(level[1] > imageHeight)
                 level[1] = imageHeight;
         }
 
@@ -996,6 +1030,45 @@ void ofApp::renderingPanel()
         ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
         ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
         ImGui::Text("Rendering Progress");
+
+        if(renderer && renderer->isFinished())
+        {
+            ImGui::Separator();
+            ImGui::Text("Ready");
+
+            ImGui::PushID(0);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(3 / 7.0f, 0.6f, 0.6f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(3 / 7.0f, 0.7f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(3 / 7.0f, 0.8f, 0.8f));
+            if(ImGui::Button("Back", ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
+            {
+
+                atmosInitOnce = false;
+                // 未初始化不允许直接结束
+                atmosEndOnce = true;
+
+                initImGui();
+            }
+            ImGui::PopStyleColor(3);
+            ImGui::PopID();
+        }
+        else
+        {
+            ImGui::Separator();
+            ImGui::Text("Waiting");
+
+            ImGui::PushID(0);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(2 / 7.0f, 0.6f, 0.6f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(2 / 7.0f, 0.7f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(2 / 7.0f, 0.8f, 0.8f));
+            string frameProgress = ofToString(currentFrame) + "/" + ofToString(endFrame - startFrame);
+            if(ImGui::Button(frameProgress.c_str(), ImVec2(ImGui::GetContentRegionAvailWidth(), 0)))
+            {
+                a3Log::debug("Waiting...\n");
+            }
+            ImGui::PopStyleColor(3);
+            ImGui::PopID();
+        }
     }
 
     ImGui::End();
@@ -1013,6 +1086,7 @@ void ofApp::about()
         ImGui::ImageButton((ImTextureID) (uintptr_t) logoButtonID, ImVec2(200, 200));
         ImGui::SameLine();
         ImGui::Text("Atmos is developed by GBB in 2016.");
+        ImGui::SameLine();
         ImGui::Text("And I guess no one would notice this passage.");
     }
 
