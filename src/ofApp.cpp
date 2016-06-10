@@ -61,7 +61,7 @@ void ofApp::update(){
             // 更新网格待渲染区域
             if(!renderer->isFinished())
             {
-#pragma omp parallel for schedule(dynamic)
+//#pragma omp parallel for schedule(dynamic)
                 for(int x = gridX; x < gridEndX; x++)
                 {
                     for(int y = gridY; y < gridEndY; y++)
@@ -177,18 +177,21 @@ void ofApp::initAtmos()
     {
         // 同时释放与renderer相关的指针内存
         A3_SAFE_DELETE(renderer->sampler);
-        //A3_SAFE_DELETE(renderer->camera->image)
+        A3_SAFE_DELETE(renderer->camera->image);
         A3_SAFE_DELETE(renderer->camera);
         A3_SAFE_DELETE(renderer->integrator);
-        A3_SAFE_DELETE(renderer->colorList);
+        A3_SAFE_DELETE_1DARRAY(renderer->colorList);
         A3_SAFE_DELETE(renderer);
     }
     if(scene)
     {
         // 同时释放与scene相关的指针内存
         for(auto l : scene->lights)
+        {
             A3_SAFE_DELETE(l);
+        }
         scene->lights.clear();
+        // delete all shapes
         for(auto p : scene->primitiveSet->primitives)
         {
             A3_SAFE_DELETE(p->areaLight);
@@ -211,6 +214,9 @@ void ofApp::initAtmos()
     else
         image = new a3Film(imageWidth, imageHeight, saveToPath);
 
+    if(previewPixels.isAllocated())
+        previewPixels.clear();
+
     previewPixels.allocate(imageWidth, imageHeight, OF_PIXELS_RGB);
 
     a3PerspectiveSensor* camera = new a3PerspectiveSensor(t3Vector3f(cameraOrigin[0], cameraOrigin[1], cameraOrigin[2]), 
@@ -231,6 +237,10 @@ void ofApp::initAtmos()
     renderer->setLevel(level[0], level[1]);
     renderer->camera = camera;
     renderer->sampler = new a3RandomSampler();
+    renderer->startX = localStartPos[0];
+    renderer->startY = localStartPos[1];
+    renderer->renderWidth = localRenderSize[0];
+    renderer->renderHeight = localRenderSize[1];
 
     // integrator
     if(enablePath)
@@ -315,7 +325,7 @@ void ofApp::initAtmos()
         {
             meshData* data = (meshData*) s;
             a3ModelImporter importer;
-            std::vector<a3Shape*>* model = NULL;
+            std::vector<a3Shape*> model;
             if(data->supportKeyFrame)
             {
                 // 路径中添加关键帧信息
@@ -326,7 +336,7 @@ void ofApp::initAtmos()
             else
                 model = importer.load(data->modelPath);
 
-            for(auto s : *model)
+            for(auto s : model)
                 addShape(s, t3Vector3f(1.0f), t3Vector3f(0.0f), data->materialType, NULL);
         }
         else if(s->name == "InfinitePlane")
@@ -382,10 +392,10 @@ void ofApp::initImGui()
     // config
     startFrame = 1;
     endFrame = 10;
-    spp = 8;
+    spp = 16;
 
-    imageWidth = 1024;
-    imageHeight = 768;
+    imageWidth = 1280;
+    imageHeight = 720;
 
     hasKeyFrame = true;
     startRendering = false;
@@ -415,15 +425,15 @@ void ofApp::initImGui()
     enableToneMapping = false;
 
     // camera
-    cameraLookat[0] = 0.0f;
+    cameraLookat[0] = -2.0f;
     cameraLookat[1] = 0.0f;
-    cameraLookat[2] = 0.0f;
+    cameraLookat[2] = 3.5f;
     cameraUp[0] = 0.0f;
     cameraUp[1] = 0.0f;
     cameraUp[2] = 1.0f;   
-    cameraOrigin[0] = 0.0f;
-    cameraOrigin[1] = 100.0f;
-    cameraOrigin[2] = 20.0f;
+    cameraOrigin[0] = -2.0f;
+    cameraOrigin[1] = 77.0f;
+    cameraOrigin[2] = 17.0f;
 
     cameraFov = 40.0f;
     cameraFocalDistance = 100.0f;
@@ -478,7 +488,7 @@ void ofApp::renderingMenu()
                 endFrame = startFrame;
         }
 
-        ImGui::DragInt("Spp", &spp, 1, 0, 1000000);
+        ImGui::DragInt("Spp", &spp, 1, 1, 1000000);
 
         ImGui::Checkbox("Has Key Frame ?##Rendering", &hasKeyFrame);
 

@@ -62,7 +62,7 @@ struct infiniteAreaLightData : public lightData
     {        // 动态获取当前可执行文件目录
         string exePath = ofFilePath::getCurrentWorkingDirectory();
 
-        exePath += "\\data\\images\\envmap.exr";
+        exePath += "\\data\\images\\glacier.exr";
 
         strcpy(imagePath, exePath.c_str());
     }
